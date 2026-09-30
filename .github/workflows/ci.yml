@@ -1,0 +1,39 @@
+name: CI - Build and Test Docker Image
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: docker build -t ai-sentiment-lab:test .
+
+      - name: Run container health check
+        run: |
+          docker run -d --name test-app -p 8501:8501 ai-sentiment-lab:test
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8501/_stcore/health; then
+              docker rm -f test-app
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker logs test-app
+          docker rm -f test-app
+          exit 1
